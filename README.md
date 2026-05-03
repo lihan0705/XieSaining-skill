@@ -96,108 +96,113 @@
 
 **输出示例：**
 
-Agent memory 的关键不只是“还能存什么”，而是历史信息能不能变成下一次行动时有用的任务表征。
+我会先把 `agent memory` 这个词拆掉。它不应该只是“把历史聊天摘要存起来，然后 RAG 一下”。更核心的问题是：agent 到底在学习什么 representation？它记住的是文本、任务状态、用户偏好、失败模式、环境变化，还是自己做决策的轨迹？
 
-现在很多 memory 做法还是比较浅的：
+我觉得还有几个很值得做的方向：
 
-- 存用户偏好
-- 存历史对话摘要
-- 存工具调用记录
-- 做 RAG 检索
-- 给 agent 一个 “long-term memory” 文件夹
+**1. 从 transcript memory 到 decision-path memory**
 
-这些有用，但大多还是 storage 或 interface 层。它让 agent 看起来连续，但不一定让 agent 更会判断。
+现在很多 memory 系统像日志压缩器：把对话变短。但 agent 真正需要的是“为什么当时做了这个选择”。
 
-更值得做的是把 memory 变成几类可验证的工作经验。
+也就是存：
 
-**1. Memory 从文本摘要变成“决策轨迹”**
+- 用户当时的目标是什么
+- agent 观察到了什么证据
+- 做了哪些假设
+- 为什么选 A 不选 B
+- 后来结果证明这个判断对不对
 
-agent 最应该记的不是“用户说过什么”，而是：
+这比“用户喜欢直接执行”更有价值。因为下一次 agent 遇到类似情况，它不是复读偏好，而是复用 decision path。
 
-- 当时为什么做这个选择
-- 有哪些 alternative 被排除
-- 哪个假设后来被验证/证伪
-- 哪些失败是 implementation failure，哪些是方向本身不 work
-- 用户真正 care 的评价标准是什么
+**2. 把 memory 分成 evidence / belief / policy**
 
-这比普通 summary 有价值。因为下一次 agent 遇到相似问题时，它不是复读历史，而是复用 decision path。
+我会非常小心不要把 memory 混成一锅粥。
 
-好的 memory 应该保留任务里的冲突、选择、证据和结果，而不是只保留一个压缩版聊天记录。
+更好的结构是：
 
-**2. Memory 要有 objective，不然只是垃圾堆**
+- `raw evidence`: 原始 session、命令输出、文件状态、用户原话
+- `belief`: 从 evidence 里蒸馏出的当前判断，允许过期
+- `policy`: 稳定的工作方式，比如“rollback 只回滚 agent 自己改的内容”
+- `open uncertainty`: 还没证实、容易漂移的东西
 
-现在很多 agent memory 的问题是没有训练目标。什么都存，最后就变成低质量 context stuffing。
+这个区分很重要。否则 agent 会把一次临时偏好当成永久人格，把一次失败环境当成普遍事实。
 
-可以把 memory 拆成不同 objective：
+**3. Memory 不只是 recall，而是 ablation surface**
 
-- **preference memory**：预测用户会不会满意这个风格/粒度/动作方式
-- **task memory**：预测下一步最可能需要哪些文件、命令、约束
-- **failure memory**：避免重复犯同类错误
-- **world-state memory**：记录项目、环境、依赖、分支、产品状态
-- **taste memory**：学习用户在设计、研究、产品判断上的取舍
+如果我是做这个系统，我会问：memory 到底贡献了什么？不是“有 memory 看起来更智能”，而是做 ablation：
 
-这些 memory 的评价方式不同。不能用同一个摘要机制解决所有问题。
+- 无 memory
+- 只用最近上下文
+- 只用用户偏好 memory
+- 只用项目事实 memory
+- 用 decision-path memory
+- 用 failure-mode memory
 
-**3. Memory 要和真实工作产物接触**
+然后看任务成功率、重复错误率、用户打断次数、修复时间。这样 memory 才从产品 feature 变成可研究对象。
 
-如果 agent 只记聊天，它会形成很语言化的自我幻觉。更有价值的是让 memory 接触真实 artifacts：
+**4. 做“失败模式记忆”比做“成功总结”更有用**
 
-- git history
-- test failures
-- PR review comments
-- issue tracker
-- design iteration screenshots
-- user rejected/accepted 的版本
-- production logs
-- notebooks / experiment results
-- benchmark drift
-- dependency/environment changes
+agent 经常重复犯的错其实很稳定：
 
-也就是说，memory 不只是 conversation memory，而是 workspace memory、artifact memory、feedback memory。
+- 没读 repo 就开始改
+- 把用户临时方向当成长期方向
+- 过度相信 README
+- 忘了运行测试
+- 把旧 session 结论当当前事实
+- rollback 时误伤用户改动
 
-agent 的世界不是抽象文本，至少先是代码库、文件系统、工具结果、用户反馈和项目历史。
+这些应该是一等 memory。成功经验当然有用，但失败模式更像 representation learning 里的 hard negatives。它们能改变下次决策边界。
 
-**4. Memory 需要“忘记机制”和置信度**
+**5. 让 memory 有世界接触，而不是只在聊天里自洽**
 
-一个危险是 memory 会 fossilize：早期偏好、旧项目状态、错误总结，一直污染后续判断。
+真正有价值的 agent memory 要能回到世界验证：
 
-所以 memory 里应该有：
+- git 当前状态是否还匹配记忆
+- 文件是否还存在
+- 测试命令是否还有效
+- 依赖版本是否漂移
+- 用户偏好是否被后来的行为推翻
 
-- freshness：这条记忆多新
-- confidence：是明确事实，还是 agent 推断
-- scope：只适用于哪个 repo/用户/任务类型
-- decay：多久没被验证就降权
-- conflict handling：新证据和旧记忆冲突时怎么处理
+所以 memory retrieval 后面应该跟一个 `verify-if-cheap` 策略。记忆不是事实，它是 prior。便宜能验证的东西不要靠 prior。
 
-这点很重要。否则 memory 会让 agent 更自信地犯旧错误。
+**6. 做 task graph memory，而不是 flat notes**
 
-**5. 更大的方向：memory as task representation**
+agent 做事不是线性的。一个任务有 blocker、side quest、rollback、用户中途改方向、验证门槛。memory 如果只是 markdown 摘要，会丢掉结构。
 
-更有意思的方向不是做一个更大的 memory database，而是问：
+我会存一个轻量 task graph：
 
-> agent 的长期行为经验，能不能压缩成一种可迁移的 task representation？
+- goal
+- constraints
+- changed files
+- commands run
+- failed attempts
+- final accepted state
+- user correction
+- reusable rule
+- invalidated assumption
 
-比如它学到：
+这样下一次 agent 可以问：“这个问题和过去哪个 graph 相似？”而不是只做关键词搜索。
 
-- 这个用户说“帮我看看”通常是希望直接执行，还是先分析
-- 这个 repo 的可靠验证门是什么
-- 什么类型的改动容易破坏测试
-- 哪些设计方向用户反复拒绝
-- 某类 bug 通常来自 checkpoint alignment，而不是 UI 层
+**7. Memory 应该能主动提出“退出条件”**
 
-这不是单条记忆，而是 latent structure。好的 memory 系统应该从 individual episodes 里抽出 reusable structure。
+比如 agent 要不要继续沿着一个方向做？memory 可以帮助判断：
 
-agent memory 最值得做的方向不是“无限上下文”，而是**从历史交互中学习可复用的决策表征**。
+- 这个方向之前被用户明确 rollback 过吗？
+- 用户是否已经从 wiki-first 转向 session-first？
+- 之前通过测试但产品逻辑被否了吗？
+- 有没有“不要再假设当前行为”的教训？
 
-一个最小可做实验可以是：
+这类 memory 不只是帮 agent 做事，更是帮 agent 停下来。
 
-1. 选一个真实 repo 或研究工作流。
-2. 把历史任务分成 episode。
-3. 每个 episode 结构化成：context、decision、tool evidence、failure、final outcome、user correction。
-4. 新任务开始前，只检索与当前 decision point 相关的 memory，不检索泛泛相似文本。
-5. 测 agent 是否减少返工、是否更少问废问题、是否更快走到正确验证路径。
+如果落到一个真实 agent memory 产品，我会优先做一个很小但很硬的 MVP：
 
-如果这个方向 work，agent memory 就不只是“记得用户喜欢什么”，而是开始积累可复用的工作经验。
+1. 保留 raw session evidence，不要丢。
+2. 每轮蒸馏出 `decision memory`，字段包括目标、证据、假设、动作、结果、用户纠正。
+3. retrieval 时强制标记：`verified-current` / `memory-derived` / `stale-risk`。
+4. 对每次 agent 失败，生成一条 `failure-mode memory`。
+5. 做 ablation，看它到底减少了多少重复错误和用户打断。
+
+我的直觉是：agent memory 的下一步不是更大的向量库，而是更好的 representation schema。真正的壁垒不在“能不能记住”，而在“记住的东西能不能改变下一次行动”。
 
 ---
 
