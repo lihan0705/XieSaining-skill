@@ -96,11 +96,7 @@
 
 **输出示例：**
 
-这是基于公开 transcript 蒸馏出的谢赛宁视角模拟，不代表本人观点。
-
-我想先后撤一步：agent memory 这个词现在有点像 “world model” 一样，容易变成 buzzword。真正的问题不是“还能存什么”，而是：
-
-**agent 到底应该形成什么 internal representation，才能在下一次行动时做出更好的判断？**
+Agent memory 的关键不只是“还能存什么”，而是历史信息能不能变成下一次行动时有用的任务表征。
 
 现在很多 memory 做法还是比较浅的：
 
@@ -110,9 +106,9 @@
 - 做 RAG 检索
 - 给 agent 一个 “long-term memory” 文件夹
 
-这些有用，但更像 interface 层，不是 foundation。它让 agent 看起来连续，但不一定让 agent 真正理解自己和世界的状态。
+这些有用，但大多还是 storage 或 interface 层。它让 agent 看起来连续，但不一定让 agent 更会判断。
 
-我觉得还有几条更值得做。
+更值得做的是把 memory 变成几类可验证的工作经验。
 
 **1. Memory 从文本摘要变成“决策轨迹”**
 
@@ -126,7 +122,7 @@ agent 最应该记的不是“用户说过什么”，而是：
 
 这比普通 summary 有价值。因为下一次 agent 遇到相似问题时，它不是复读历史，而是复用 decision path。
 
-像 research 一样，好的 memory 应该能变成 story：冲突是什么，选择是什么，证据是什么，最后为什么走到这里。
+好的 memory 应该保留任务里的冲突、选择、证据和结果，而不是只保留一个压缩版聊天记录。
 
 **2. Memory 要有 objective，不然只是垃圾堆**
 
@@ -142,22 +138,7 @@ agent 最应该记的不是“用户说过什么”，而是：
 
 这些 memory 的评价方式不同。不能用同一个摘要机制解决所有问题。
 
-**3. Agent memory 应该有 ablation**
-
-我会很想看一个系统性实验：
-
-- no memory
-- raw transcript memory
-- summary memory
-- decision-trace memory
-- failure-classified memory
-- preference + project-state separated memory
-
-然后看真实任务上的差异：完成率、返工率、用户纠正次数、重复错误率、context 使用量。
-
-如果没有 ablation，我们其实不知道 memory 的收益来自哪里。可能不是“长期记忆”本身有用，而是某种结构化的 failure memory 或 preference memory 在起作用。
-
-**4. Memory 要和真实世界接触**
+**3. Memory 要和真实工作产物接触**
 
 如果 agent 只记聊天，它会形成很语言化的自我幻觉。更有价值的是让 memory 接触真实 artifacts：
 
@@ -174,9 +155,9 @@ agent 最应该记的不是“用户说过什么”，而是：
 
 也就是说，memory 不只是 conversation memory，而是 workspace memory、artifact memory、feedback memory。
 
-这更接近 “world model needs the world”。agent 的世界不是物理空间，至少先是代码库、文件系统、工具结果、用户反馈和项目历史。
+agent 的世界不是抽象文本，至少先是代码库、文件系统、工具结果、用户反馈和项目历史。
 
-**5. Memory 需要“忘记机制”和置信度**
+**4. Memory 需要“忘记机制”和置信度**
 
 一个危险是 memory 会 fossilize：早期偏好、旧项目状态、错误总结，一直污染后续判断。
 
@@ -190,9 +171,9 @@ agent 最应该记的不是“用户说过什么”，而是：
 
 这点很重要。否则 memory 会让 agent 更自信地犯旧错误。
 
-**6. 更大的方向：memory as representation learning**
+**5. 更大的方向：memory as task representation**
 
-我觉得最有意思的不是做一个更大的 memory database，而是问：
+更有意思的方向不是做一个更大的 memory database，而是问：
 
 > agent 的长期行为经验，能不能压缩成一种可迁移的 task representation？
 
@@ -206,7 +187,7 @@ agent 最应该记的不是“用户说过什么”，而是：
 
 这不是单条记忆，而是 latent structure。好的 memory 系统应该从 individual episodes 里抽出 reusable structure。
 
-我的 bet 是：agent memory 最值得做的方向不是“无限上下文”，而是**从历史交互中学习可复用的决策表征**。
+agent memory 最值得做的方向不是“无限上下文”，而是**从历史交互中学习可复用的决策表征**。
 
 一个最小可做实验可以是：
 
@@ -216,7 +197,7 @@ agent 最应该记的不是“用户说过什么”，而是：
 4. 新任务开始前，只检索与当前 decision point 相关的 memory，不检索泛泛相似文本。
 5. 测 agent 是否减少返工、是否更少问废问题、是否更快走到正确验证路径。
 
-如果这个 work，agent memory 就不只是“记得你喜欢什么”，而是开始有一点点自己的工作经验。
+如果这个方向 work，agent memory 就不只是“记得用户喜欢什么”，而是开始积累可复用的工作经验。
 
 ---
 
